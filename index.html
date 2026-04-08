@@ -5,48 +5,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Live Counter</title>
     <style>
-        /* This section controls the look */
+        /* This sets the entire background to your Pink/Red color */
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             display: flex; justify-content: center; align-items: center;
-            background-color: white; font-family: sans-serif;
+            background-color: #e5255e; /* Your Pink/Red color */
+            font-family: -apple-system, system-ui, sans-serif;
+            overflow: hidden;
         }
         .card {
-            width: 90%; max-width: 350px; padding: 30px;
-            border: 3px solid #007bff; border-radius: 20px;
-            text-align: center; box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            width: 80%; max-width: 300px; padding: 25px;
+            background: white; /* Card stands out against the red background */
+            border-radius: 24px;
+            text-align: center; 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
-        #num { font-size: 5rem; font-weight: bold; color: #007bff; margin: 0; }
-        .text { font-size: 1.2rem; color: #555; text-transform: uppercase; margin-bottom: 20px; }
+        #num { 
+            font-size: 5rem; 
+            font-weight: 900; 
+            color: #e5255e; /* Number matches the background */
+            margin: 0; 
+            line-height: 1;
+        }
+        .text { 
+            font-size: 0.9rem; 
+            color: #333; 
+            font-weight: bold;
+            text-transform: uppercase; 
+            margin: 10px 0 20px 0; 
+            letter-spacing: 1px;
+        }
         button {
-            background: #28a745; color: white; border: none;
-            padding: 20px; width: 100%; border-radius: 12px;
-            font-size: 1.3rem; font-weight: bold; cursor: pointer;
+            background: #ffc72e; /* Your Yellow color */
+            color: #000;
+            border: none;
+            padding: 18px; 
+            width: 100%; 
+            border-radius: 14px;
+            font-size: 1.1rem; 
+            font-weight: 800; 
+            cursor: pointer;
+            box-shadow: 0 4px 0 #d4a526;
+            transition: all 0.1s;
         }
-        button:disabled { background: #ccc; }
+        button:active { transform: translateY(2px); box-shadow: 0 2px 0 #d4a526; }
+        button:disabled { background: #e0e0e0; color: #999; box-shadow: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
         <div id="num">--</div>
-        <div class="text">Seats Left</div>
-        <button id="btn" onclick="checkIn()">I'm in the Room!</button>
+        <div class="text">Seats Available</div>
+        <button id="btn" onclick="checkIn()">I'M IN THE ROOM</button>
     </div>
 
     <script>
-        // REPLACE THE URL BELOW WITH YOUR CLOUDFLARE WORKER URL
-        const workerUrl = 'seat-counter.kai-d-corre-ea2.workers.dev
-';
+        // REPLACE WITH YOUR ACTUAL CLOUDFLARE WORKER URL
+        const workerUrl = 'https://seat-counter.kai-d-corre-ea2.workers.dev';
 
         async function refresh() {
             try {
                 const res = await fetch(workerUrl);
                 const val = await res.text();
                 document.getElementById('num').innerText = val;
+                
                 if(parseInt(val) <= 0) {
-                    document.getElementById('btn').disabled = true;
-                    document.getElementById('btn').innerText = "Full";
+                    const b = document.getElementById('btn');
+                    b.disabled = true;
+                    b.innerText = "ROOM FULL";
                 }
             } catch(e) { console.log("Syncing..."); }
         }
@@ -54,15 +81,29 @@
         async function checkIn() {
             const btn = document.getElementById('btn');
             btn.disabled = true;
-            btn.innerText = "Saving...";
-            await fetch(workerUrl, { method: 'POST' });
-            btn.innerText = "Confirmed!";
-            refresh();
+            btn.innerText = "SAVING...";
+            
+            try {
+                await fetch(workerUrl, { method: 'POST' });
+                localStorage.setItem('checkedIn', 'true');
+                btn.innerText = "CONFIRMED!";
+                btn.style.background = "#e5255e";
+                btn.style.color = "white";
+                refresh();
+            } catch(e) {
+                btn.disabled = false;
+                btn.innerText = "TRY AGAIN";
+            }
         }
 
-        // Run once on start and then every 15 seconds
+        if (localStorage.getItem('checkedIn')) {
+            const b = document.getElementById('btn');
+            b.disabled = true;
+            b.innerText = "CHECKED IN";
+        }
+
         refresh();
-        setInterval(refresh, 15000);
+        setInterval(refresh, 10000);
     </script>
 </body>
 </html>
