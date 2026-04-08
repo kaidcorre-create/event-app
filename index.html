@@ -5,105 +5,116 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Live Counter</title>
     <style>
-        /* This sets the entire background to your Pink/Red color */
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             display: flex; justify-content: center; align-items: center;
-            background-color: #e2185b; /* Your Pink/Red color */
-            font-family: -apple-system, system-ui, sans-serif;
+            background-color: #e5255e; font-family: -apple-system, system-ui, sans-serif;
             overflow: hidden;
         }
         .card {
-            width: 80%; max-width: 300px; padding: 25px;
-            background: white; /* Card stands out against the red background */
-            border-radius: 24px;
-            text-align: center; 
+            width: 85%; max-width: 300px; padding: 25px;
+            background: white; border-radius: 24px; text-align: center; 
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
-        #num { 
-            font-size: 5rem; 
-            font-weight: 900; 
-            color: #e5255e; /* Number matches the background */
-            margin: 0; 
-            line-height: 1;
-        }
-        .text { 
-            font-size: 0.9rem; 
-            color: #333; 
-            font-weight: bold;
-            text-transform: uppercase; 
-            margin: 10px 0 20px 0; 
-            letter-spacing: 1px;
+        #num { font-size: 5rem; font-weight: 900; color: #e5255e; margin: 0; line-height: 1; }
+        .text { font-size: 0.9rem; color: #333; font-weight: bold; text-transform: uppercase; margin: 10px 0 15px 0; }
+        input {
+            width: 80%; padding: 12px; margin-bottom: 15px;
+            border: 2px solid #ddd; border-radius: 10px;
+            font-size: 1.2rem; text-align: center; letter-spacing: 4px;
         }
         button {
-            background: #ffc72e; /* Your Yellow color */
-            color: #000;
-            border: none;
-            padding: 18px; 
-            width: 100%; 
-            border-radius: 14px;
-            font-size: 1.1rem; 
-            font-weight: 800; 
-            cursor: pointer;
-            box-shadow: 0 4px 0 #d4a526;
-            transition: all 0.1s;
+            background: #ffc72e; color: #000; border: none; padding: 18px; 
+            width: 100%; border-radius: 14px; font-size: 1.1rem; font-weight: 800; 
+            cursor: pointer; box-shadow: 0 4px 0 #d4a526;
         }
-        button:active { transform: translateY(2px); box-shadow: 0 2px 0 #d4a526; }
         button:disabled { background: #e0e0e0; color: #999; box-shadow: none; }
+        .success { color: #28a745; font-size: 1.2rem; font-weight: bold; }
+        .tick { font-size: 4rem; display: block; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="card">
+    <div class="card" id="cardContent">
         <div id="num">--</div>
         <div class="text">Seats Available</div>
+        <input type="number" id="pinInput" placeholder="PIN CODE">
         <button id="btn" onclick="checkIn()">I'M IN THE ROOM</button>
+        <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px; height: 1em;"></div>
     </div>
 
     <script>
-  
-        const workerUrl = 'https://seat-counter.kai-d-corre-ea2.workers.dev';
+        // --- CONFIGURATION ---
+        const params = new URLSearchParams(window.location.search);
+        const roomID = params.get('room') || 'Room1';
+        
+        // ADD YOUR PINs HERE: 'RoomID': 'PIN'
+        const pinMapping = {
+            'Room1': '0412',
+            'Room2': '9876',
+            'Room3': '3314'.
+            'Room4': '4063'    
+        };
+
+        const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
+        let refreshInterval;
+
+        function showCheckedIn() {
+            clearInterval(refreshInterval); 
+            document.getElementById('cardContent').innerHTML = `
+                <div class="tick">✅</div>
+                <div class="success">CHECKED INTO THIS WORKSHOP</div>
+            `;
+        }
 
         async function refresh() {
+            if (document.hidden) return; 
             try {
                 const res = await fetch(workerUrl);
                 const val = await res.text();
                 document.getElementById('num').innerText = val;
-                
                 if(parseInt(val) <= 0) {
-                    const b = document.getElementById('btn');
-                    b.disabled = true;
-                    b.innerText = "ROOM FULL";
+                    document.getElementById('btn').disabled = true;
+                    document.getElementById('btn').innerText = "ROOM FULL";
                 }
-            } catch(e) { console.log("Syncing..."); }
+            } catch(e) {}
         }
 
         async function checkIn() {
             const btn = document.getElementById('btn');
+            const pinInput = document.getElementById('pinInput').value;
+            const errorMsg = document.getElementById('errorMsg');
+            const correctPin = pinMapping[roomID];
+
+            // Check PIN locally first to save Cloudflare requests
+            if (pinInput !== correctPin) {
+                errorMsg.innerText = "Invalid PIN. Try again.";
+                return;
+            }
+
             btn.disabled = true;
             btn.innerText = "SAVING...";
             
             try {
-                await fetch(workerUrl, { method: 'POST' });
-                localStorage.setItem('checkedIn', 'true');
-                btn.innerText = "CONFIRMED!";
-                btn.style.background = "#e5255e";
-                btn.style.color = "white";
-                refresh();
-            } catch(e) {
-                btn.disabled = false;
-                btn.innerText = "TRY AGAIN";
+                // Since PIN is verified here, we just tell the worker to subtract
+                const response = await fetch(workerUrl, { method: 'POST' });
+
+                if (response.ok) {
+                    localStorage.setItem('checkedIn_' + roomID, 'true');
+                    showCheckedIn();
+                }
+            } catch(e) { 
+                btn.disabled = false; 
+                btn.innerText = "TRY AGAIN"; 
             }
         }
 
-        if (localStorage.getItem('checkedIn')) {
-            const b = document.getElementById('btn');
-            b.disabled = true;
-            b.innerText = "CHECKED IN";
+        if (localStorage.getItem('checkedIn_' + roomID)) {
+            showCheckedIn();
+        } else {
+            refresh();
+            refreshInterval = setInterval(refresh, 60000);
         }
-
-        refresh();
-        setInterval(refresh, 60000);
     </script>
 </body>
 </html>
