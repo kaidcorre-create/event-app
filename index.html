@@ -13,17 +13,14 @@
         }
         .card {
             position: relative;
-            width: 85%; max-width: 300px; padding: 50px 25px 25px 25px;
+            width: 85%; max-width: 300px; padding: 40px 25px;
             background: white; border-radius: 24px; text-align: center; 
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            min-height: 280px; display: flex; flex-direction: column; justify-content: center;
+            min-height: 320px; display: flex; flex-direction: column; justify-content: center;
+            transition: all 0.3s ease;
         }
 
-        /* Splash Button - Quota Protection */
-        #splashArea { width: 100%; }
-        #splashBtn { background: #e5255e; color: white; box-shadow: 0 4px 0 #b01a46; }
-
-        /* Refresh Button */
+        /* Top Right Refresh Button */
         .refresh-container {
             position: absolute; top: 15px; right: 15px;
             text-align: center; cursor: pointer; color: #666; z-index: 10;
@@ -31,6 +28,17 @@
         .refresh-icon { font-size: 1.2rem; display: block; transition: transform 0.5s ease; }
         .refresh-text { font-size: 0.5rem; text-transform: uppercase; line-height: 1.2; display: block; margin-top: 2px; }
 
+        /* Splash Screen / Quota Protector */
+        #splashArea { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        .splash-icon {
+            font-size: 3rem; background: #fdf2f5; width: 90px; height: 90px;
+            line-height: 90px; border-radius: 50%; color: #e5255e; margin-bottom: 5px;
+        }
+        .splash-title { font-size: 1.2rem; font-weight: 800; color: #333; margin: 0; }
+        .splash-sub { font-size: 0.85rem; color: #777; margin-bottom: 5px; line-height: 1.4; }
+        #splashBtn { background: #e5255e; color: white; box-shadow: 0 5px 0 #b01a46; }
+
+        /* Main UI Elements */
         #num { font-size: 5rem; font-weight: 900; color: #e5255e; margin: 0; line-height: 1; }
         .text { font-size: 0.9rem; color: #333; font-weight: bold; text-transform: uppercase; margin: 10px 0 15px 0; }
         
@@ -76,7 +84,10 @@
     </div>
 
     <div id="splashArea">
-        <button id="splashBtn" onclick="initApp()">SHOW AVAILABLE SEATS</button>
+        <div class="splash-icon">💺</div>
+        <h2 class="splash-title">Workshop Access</h2>
+        <p class="splash-sub">Check live availability for<br>this workshop session.</p>
+        <button id="splashBtn" onclick="initApp()">SHOW LIVE SEATS</button>
     </div>
 
     <div id="mainApp" style="display:none;">
@@ -90,7 +101,7 @@
 
         <div id="successArea" style="display:none;">
             <div class="success-checkmark"><div class="check-icon"></div></div>
-            <div style="color: #28a745; font-weight: bold; margin-bottom: 15px; letter-spacing: 1px;">CHECKED IN</div>
+            <div style="color: #28a745; font-weight: bold; margin-bottom: 15px; letter-spacing: 1px;">CHECKED INTO WORKSHOP</div>
             <button id="leaveBtn" style="background: #333; color: white; box-shadow: 0 4px 0 #000;" onclick="updateSeat(1)">LEAVE ROOM</button>
         </div>
     </div>
@@ -102,6 +113,8 @@
     const params = new URLSearchParams(window.location.search);
     const roomID = params.get('room'); 
     const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
+    
+    // Extract base name for PIN (Room1_1100 -> Room1)
     const baseRoom = roomID ? roomID.split('_')[0] : null;
     const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
 
@@ -110,7 +123,7 @@
         document.getElementById('mainApp').style.display = 'block';
         document.getElementById('refreshUI').style.display = 'block';
         
-        // Check if already checked in
+        // Check local storage status
         if (localStorage.getItem('checkedIn_' + roomID)) {
             setUI(true);
         } else {
@@ -128,6 +141,10 @@
     async function refresh() {
         const numEl = document.getElementById('num');
         const iconEl = document.querySelector('.refresh-icon');
+        
+        // If app isn't active or no roomID, don't ping
+        if(document.getElementById('mainApp').style.display === 'none' || !roomID) return;
+
         iconEl.style.transform = "rotate(360deg)";
         
         try {
@@ -146,8 +163,10 @@
 
     async function updateSeat(delta) {
         const pinInput = document.getElementById('pinInput').value;
+        const errorMsg = document.getElementById('errorMsg');
+
         if (delta === -1 && pinInput !== pinMapping[baseRoom]) {
-            document.getElementById('errorMsg').innerText = "Invalid PIN";
+            errorMsg.innerText = "Invalid PIN";
             return;
         }
 
@@ -157,6 +176,7 @@
                 body: JSON.stringify({ change: delta }),
                 headers: { 'Content-Type': 'application/json' }
             });
+            
             if (response.ok) {
                 const data = await response.json();
                 document.getElementById('num').innerText = data.count;
@@ -168,18 +188,17 @@
                     setUI(false);
                 }
             }
-        } catch(e) { document.getElementById('errorMsg').innerText = "Error"; }
+        } catch(e) { errorMsg.innerText = "Connection Error"; }
     }
 
-    // Auto-init if already checked in (so they don't see the splash button twice)
+    // Auto-init if they are already checked in for this session
     if (localStorage.getItem('checkedIn_' + roomID)) {
         initApp();
     }
 
-    window.addEventListener('focus', () => {
-        if(document.getElementById('mainApp').style.display === 'block') refresh();
-    });
+    // Refresh only when tab becomes active
+    window.addEventListener('focus', refresh);
 </script>
 
 </body>
-</html>v
+</html>
