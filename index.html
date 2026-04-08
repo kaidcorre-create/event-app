@@ -3,92 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Live Counter</title>
     <style>
+        /* This section controls the look */
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; /* Removes scrollbars */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: white; 
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background-color: white; font-family: sans-serif;
         }
-        .container {
-            width: 90%; /* Forces the card to take up most of the phone width */
-            max-width: 400px;
-            padding: 20px;
-            border: 2px solid #007bff;
-            border-radius: 16px;
-            text-align: center;
+        .card {
+            width: 90%; max-width: 350px; padding: 30px;
+            border: 3px solid #007bff; border-radius: 20px;
+            text-align: center; box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
-        #num { font-size: 5rem; font-weight: 800; color: #007bff; }
+        #num { font-size: 5rem; font-weight: bold; color: #007bff; margin: 0; }
+        .text { font-size: 1.2rem; color: #555; text-transform: uppercase; margin-bottom: 20px; }
+        button {
+            background: #28a745; color: white; border: none;
+            padding: 20px; width: 100%; border-radius: 12px;
+            font-size: 1.3rem; font-weight: bold; cursor: pointer;
+        }
+        button:disabled { background: #ccc; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div id="num">--</div>
-    <div class="label">Seats Remaining</div>
-    
-    <button id="btn" onclick="checkIn()">I'm in the Room!</button>
-    <div id="msg"></div>
-</div>
+    <div class="card">
+        <div id="num">--</div>
+        <div class="text">Seats Left</div>
+        <button id="btn" onclick="checkIn()">I'm in the Room!</button>
+    </div>
 
-<script>
-    // 1. SET YOUR WORKER URL HERE
-    const workerUrl = 'seat-counter.kai-d-corre-ea2.workers.dev';
+    <script>
+        // REPLACE THE URL BELOW WITH YOUR CLOUDFLARE WORKER URL
+        const workerUrl = 'seat-counter.kai-d-corre-ea2.workers.dev
+';
 
-    const numDisplay = document.getElementById('num');
-    const btn = document.getElementById('btn');
-    const msg = document.getElementById('msg');
-
-    // Prevent multiple clicks from the same device using LocalStorage
-    if (localStorage.getItem('checkedIn')) {
-        btn.disabled = true;
-        btn.innerText = "Check-in Recorded";
-    }
-
-    async function updateDisplay() {
-        try {
-            const res = await fetch(workerUrl);
-            const count = await res.text();
-            numDisplay.innerText = count;
-
-            if (parseInt(count) <= 0) {
-                btn.disabled = true;
-                btn.innerText = "Room Full";
-            }
-        } catch (err) {
-            console.error("Connection error:", err);
-            msg.innerText = "Syncing...";
+        async function refresh() {
+            try {
+                const res = await fetch(workerUrl);
+                const val = await res.text();
+                document.getElementById('num').innerText = val;
+                if(parseInt(val) <= 0) {
+                    document.getElementById('btn').disabled = true;
+                    document.getElementById('btn').innerText = "Full";
+                }
+            } catch(e) { console.log("Syncing..."); }
         }
-    }
 
-    async function checkIn() {
-        btn.disabled = true;
-        btn.innerText = "Processing...";
-        
-        try {
-            // POST request triggers the subtraction in the Cloudflare Worker
+        async function checkIn() {
+            const btn = document.getElementById('btn');
+            btn.disabled = true;
+            btn.innerText = "Saving...";
             await fetch(workerUrl, { method: 'POST' });
-            
-            localStorage.setItem('checkedIn', 'true');
             btn.innerText = "Confirmed!";
-            msg.innerText = "Welcome to the session!";
-            updateDisplay();
-        } catch (err) {
-            btn.disabled = false;
-            btn.innerText = "Try Again";
-            msg.innerText = "Connection failed.";
+            refresh();
         }
-    }
 
-    // Initialize and set refresh interval (15 seconds to be safe)
-    updateDisplay();
-    setInterval(updateDisplay, 15000);
-</script>
-
+        // Run once on start and then every 15 seconds
+        refresh();
+        setInterval(refresh, 15000);
+    </script>
 </body>
 </html>
