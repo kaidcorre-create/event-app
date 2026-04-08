@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Live Counter</title>
+    <title>Seat Counter</title>
     <style>
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -35,95 +35,79 @@
 </head>
 <body>
 
-    <div class="card" id="cardContent">
-        <div id="num">--</div>
-        <div class="text">Seats Available</div>
+   <div class="card" id="cardContent">
+    <div id="num">--</div>
+    <div class="text">Seats Available</div>
+    
+    <div id="entryArea">
         <input type="number" id="pinInput" placeholder="PIN CODE">
-        <button id="btn" onclick="checkIn()">I'M IN THE ROOM</button>
-        <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px; height: 1em;"></div>
+        <button id="joinBtn" onclick="updateSeat(-1)">I'M IN THE ROOM</button>
     </div>
 
-    <script>
+    <div id="successArea" style="display:none;">
+        <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
+        <div style="color: #28a745; font-weight: bold; margin-bottom: 15px;">CHECKED IN</div>
+        <button id="leaveBtn" style="background: #333; color: white; box-shadow: 0 4px 0 #000;" onclick="updateSeat(1)">LEAVE ROOM</button>
+    </div>
 
+    <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px; height: 1em;"></div>
+</div>
 
-// 1. Get Room from URL only
-const params = new URLSearchParams(window.location.search);
-const roomID = params.get('room'); // Removed the default 'Room1'
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const roomID = params.get('room');
+    const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
+    const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
+    
+    // UI Toggle
+    function setUI(checkedIn) {
+        document.getElementById('entryArea').style.display = checkedIn ? 'none' : 'block';
+        document.getElementById('successArea').style.display = checkedIn ? 'block' : 'none';
+        document.getElementById('errorMsg').innerText = "";
+    }
 
-// 2. Stop everything if no room is found
-if (!roomID) {
-    document.getElementById('num').innerText = "ERR";
-    document.getElementById('errorMsg').innerText = "No Room Specified in URL";
-    document.getElementById('btn').disabled = true;
-    throw new Error("Stopping: No Room ID provided."); 
-}
+    async function updateSeat(delta) {
+        const pinInput = document.getElementById('pinInput').value;
+        const errorMsg = document.getElementById('errorMsg');
 
-const pinMapping = {
-    'Room1': '0412',
-    'Room2': '9876',
-    'Room3': '3314',
-    'Room4': '4063'
-};
-
-        const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
-        let refreshInterval;
-
-        function showCheckedIn() {
-            clearInterval(refreshInterval); 
-            document.getElementById('cardContent').innerHTML = `
-                <div class="tick">✅</div>
-                <div class="success">CHECKED INTO THIS WORKSHOP</div>
-            `;
+        // Only validate PIN when joining
+        if (delta === -1 && pinInput !== pinMapping[roomID]) {
+            errorMsg.innerText = "Invalid PIN";
+            return;
         }
 
-        async function refresh() {
-            if (document.hidden) return; 
-            try {
-                const res = await fetch(workerUrl);
-                const val = await res.text();
-                document.getElementById('num').innerText = val;
-                if(parseInt(val) <= 0) {
-                    document.getElementById('btn').disabled = true;
-                    document.getElementById('btn').innerText = "ROOM FULL";
-                }
-            } catch(e) {}
-        }
+        try {
+            // We tell the worker to add or subtract 1
+            const response = await fetch(workerUrl, { 
+                method: 'POST',
+                body: JSON.stringify({ change: delta }),
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-        async function checkIn() {
-            const btn = document.getElementById('btn');
-            const pinInput = document.getElementById('pinInput').value;
-            const errorMsg = document.getElementById('errorMsg');
-            const correctPin = pinMapping[roomID];
-
-            // Check PIN locally first to save Cloudflare requests
-            if (pinInput !== correctPin) {
-                errorMsg.innerText = "Invalid PIN. Try again.";
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerText = "SAVING...";
-            
-            try {
-                // Since PIN is verified here, we just tell the worker to subtract
-                const response = await fetch(workerUrl, { method: 'POST' });
-
-                if (response.ok) {
+            if (response.ok) {
+                const newVal = await response.text();
+                document.getElementById('num').innerText = newVal;
+                
+                if (delta === -1) {
                     localStorage.setItem('checkedIn_' + roomID, 'true');
-                    showCheckedIn();
+                    setUI(true);
+                } else {
+                    localStorage.removeItem('checkedIn_' + roomID);
+                    setUI(false);
                 }
-            } catch(e) { 
-                btn.disabled = false; 
-                btn.innerText = "TRY AGAIN"; 
             }
-        }
+        } catch(e) { errorMsg.innerText = "Connection error"; }
+    }
 
-        if (localStorage.getItem('checkedIn_' + roomID)) {
-            showCheckedIn();
-        } else {
-            refresh();
-            refreshInterval = setInterval(refresh, 60000);
-        }
-    </script>
-</body>
-</html>
+    async function refresh() {
+        if (document.hidden) return;
+        const res = await fetch(workerUrl);
+        const val = await res.text();
+        document.getElementById('num').innerText = val;
+    }
+
+    // Initialize
+    if (localStorage.getItem('checkedIn_' + roomID)) { setUI(true); }
+    refresh();
+    setInterval(refresh, 60000);
+</script>
