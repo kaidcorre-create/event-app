@@ -53,65 +53,48 @@
     <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px; height: 1em;"></div>
 </div>
 
-<script>
+<<script>
+    // 1. Get the Room ID directly from your Whova link (e.g., Room1_1300)
     const params = new URLSearchParams(window.location.search);
-    const roomID = params.get('room');
-    const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
+    const roomID = params.get('room'); 
+
+    // 2. PIN Mapping - We only need the base Room names here
+    const pinMapping = { 
+        'Room1': '0412', 
+        'Room2': '9876', 
+        'Room3': '3314', 
+        'Room4': '4063' 
+    };
+
+    // Extract "Room1" from "Room1_1300" to verify the PIN
+    const baseRoom = roomID ? roomID.split('_')[0] : null;
     const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
-    const EXPIRY_TIME = 60 * 60 * 1000; 
-    
-    let refreshInterval = null;
 
-    // Stops background requests to save Cloudflare quota
-    function stopRefresh() {
-        if (refreshInterval) {
-            clearInterval(refreshInterval);
-            refreshInterval = null;
-            console.log("Polling stopped to save data.");
-        }
+    if (!roomID) {
+        document.getElementById('num').innerText = "ERR";
+        document.body.innerHTML = "<h1>Invalid Link</h1>";
     }
 
-    // Starts background requests (only if not checked in)
-    function startRefresh() {
-        if (!refreshInterval) {
-            refresh(); // Get initial count
-            refreshInterval = setInterval(refresh, 60000);
-            console.log("Polling started.");
-        }
-    }
-
+    // --- UI FUNCTIONS ---
     function setUI(checkedIn) {
         document.getElementById('entryArea').style.display = checkedIn ? 'none' : 'block';
         document.getElementById('successArea').style.display = checkedIn ? 'block' : 'none';
         document.getElementById('errorMsg').innerText = "";
-        
-        if (checkedIn) {
-            stopRefresh(); // KILL REQUESTS
-        } else {
-            startRefresh(); // RESUME REQUESTS
-        }
     }
 
-    function checkExpiration() {
-        const checkInData = localStorage.getItem('checkedIn_' + roomID);
-        if (checkInData) {
-            const parsedData = JSON.parse(checkInData);
-            const now = new Date().getTime();
-            if (now - parsedData.timestamp > EXPIRY_TIME) {
-                localStorage.removeItem('checkedIn_' + roomID);
-                return false;
-            }
-            return true;
-        }
-        return false;
+    async function refresh() {
+        if (document.hidden) return;
+        try {
+            const res = await fetch(workerUrl);
+            const data = await res.json();
+            document.getElementById('num').innerText = data.count;
+        } catch(e) { console.log("Sync..."); }
     }
 
     async function updateSeat(delta) {
         const pinInput = document.getElementById('pinInput').value;
-        const errorMsg = document.getElementById('errorMsg');
-
-        if (delta === -1 && pinInput !== pinMapping[roomID]) {
-            errorMsg.innerText = "Invalid PIN";
+        if (delta === -1 && pinInput !== pinMapping[baseRoom]) {
+            document.getElementById('errorMsg').innerText = "Invalid PIN";
             return;
         }
 
@@ -121,36 +104,25 @@
                 body: JSON.stringify({ change: delta }),
                 headers: { 'Content-Type': 'application/json' }
             });
-
             if (response.ok) {
-                const newVal = await response.text();
-                document.getElementById('num').innerText = newVal;
-                
+                const data = await response.json();
+                document.getElementById('num').innerText = data.count;
                 if (delta === -1) {
-                    const record = { status: true, timestamp: new Date().getTime() };
-                    localStorage.setItem('checkedIn_' + roomID, JSON.stringify(record));
+                    localStorage.setItem('checkedIn_' + roomID, 'true');
                     setUI(true);
                 } else {
                     localStorage.removeItem('checkedIn_' + roomID);
                     setUI(false);
                 }
             }
-        } catch(e) { errorMsg.innerText = "Connection error"; }
+        } catch(e) { document.getElementById('errorMsg').innerText = "Error"; }
     }
 
-    async function refresh() {
-        if (document.hidden) return;
-        try {
-            const res = await fetch(workerUrl);
-            const val = await res.text();
-            document.getElementById('num').innerText = val;
-        } catch(e) {}
-    }
-
-    // INITIALIZE
-    if (checkExpiration()) { 
-        setUI(true); 
+    // Start
+    if (localStorage.getItem('checkedIn_' + roomID)) {
+        setUI(true);
     } else {
-        setUI(false); // This will trigger startRefresh()
+        refresh();
+        setInterval(refresh, 60000);
     }
 </script>
