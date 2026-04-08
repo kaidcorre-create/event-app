@@ -12,12 +12,28 @@
             overflow: hidden;
         }
         .card {
-            width: 85%; max-width: 300px; padding: 25px;
+            position: relative; /* Needed for top-right button */
+            width: 85%; max-width: 300px; padding: 50px 25px 25px 25px;
             background: white; border-radius: 24px; text-align: center; 
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
+
+        /* Refresh Button Styles */
+        .refresh-container {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            text-align: center;
+            cursor: pointer;
+            color: #666;
+            z-index: 10;
+        }
+        .refresh-icon { font-size: 1.2rem; display: block; transition: transform 0.5s ease; }
+        .refresh-text { font-size: 0.5rem; text-transform: uppercase; line-height: 1.2; display: block; margin-top: 2px; }
+
         #num { font-size: 5rem; font-weight: 900; color: #e5255e; margin: 0; line-height: 1; }
         .text { font-size: 0.9rem; color: #333; font-weight: bold; text-transform: uppercase; margin: 10px 0 15px 0; }
+        
         input {
             width: 80%; padding: 12px; margin-bottom: 15px;
             border: 2px solid #ddd; border-radius: 10px;
@@ -29,55 +45,141 @@
             cursor: pointer; box-shadow: 0 4px 0 #d4a526;
         }
         button:disabled { background: #e0e0e0; color: #999; box-shadow: none; }
-        .success { color: #28a745; font-size: 1.2rem; font-weight: bold; }
-        .tick { font-size: 4rem; display: block; margin-bottom: 10px; }
+
+        /* Animated CSS Checkmark */
+        .success-checkmark {
+            width: 60px; height: 60px; margin: 0 auto 15px;
+        }
+        .check-icon {
+            width: 60px; height: 60px; position: relative;
+            border-radius: 50%; border: 4px solid #4CAF50; box-sizing: border-box;
+        }
+        .check-icon::after {
+            content: '';
+            position: absolute; top: 28px; left: 12px;
+            width: 15px; height: 30px;
+            border-right: 4px solid #4CAF50; border-bottom: 4px solid #4CAF50;
+            transform: rotate(45deg) scaleX(-1); transform-origin: left top;
+            animation: check-draw 0.8s ease forwards;
+        }
+        @keyframes check-draw {
+            0% { height: 0; width: 0; }
+            20% { height: 0; width: 15px; }
+            40% { height: 30px; width: 15px; }
+            100% { height: 30px; width: 15px; }
+        }
     </style>
 </head>
 <body>
 
 <div class="card" id="cardContent">
+    <div class="refresh-container" onclick="refresh()">
+        <span class="refresh-icon">↻</span>
+        <span class="refresh-text">Refresh/<br>Update Counter</span>
+    </div>
+
     <div id="num">--</div>
     <div class="text">Seats Available</div>
     
-    <div id="refreshLink" style="font-size: 0.7rem; color: #666; cursor: pointer; text-decoration: underline; margin-top: -5px; margin-bottom: 15px;" onclick="refresh()">
-        Check Live Seats
-    </div>
-
     <div id="entryArea">
         <input type="number" id="pinInput" placeholder="PIN CODE">
         <button id="btn" onclick="updateSeat(-1)">I'M IN THE ROOM</button>
     </div>
 
     <div id="successArea" style="display:none;">
-        <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
-        <div style="color: #28a745; font-weight: bold; margin-bottom: 15px;">CHECKED IN</div>
-        <button id="leaveBtn" style="background: #333; color: white;" onclick="updateSeat(1)">LEAVE ROOM</button>
+        <div class="success-checkmark">
+            <div class="check-icon"></div>
+        </div>
+        <div style="color: #28a745; font-weight: bold; margin-bottom: 15px; letter-spacing: 1px;">
+            CHECKED INTO WORKSHOP
+        </div>
+        <button id="leaveBtn" style="background: #333; color: white; box-shadow: 0 4px 0 #000;" onclick="updateSeat(1)">
+            LEAVE ROOM
+        </button>
     </div>
 
-    <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px;"></div>
+    <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px; height: 1.2em;"></div>
 </div>
 
 <script>
     const params = new URLSearchParams(window.location.search);
     const roomID = params.get('room'); 
     const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
+    
+    // Extract base name for PIN (e.g. "Room1_1300" -> "Room1")
     const baseRoom = roomID ? roomID.split('_')[0] : null;
     const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
 
     function setUI(checkedIn) {
         document.getElementById('entryArea').style.display = checkedIn ? 'none' : 'block';
         document.getElementById('successArea').style.display = checkedIn ? 'block' : 'none';
-        
-        // Hide/Show seat info and refresh button
-        const visibility = checkedIn ? 'hidden' : 'visible';
-        document.getElementById('num').style.visibility = visibility;
-        document.querySelector('.text').style.visibility = visibility;
-        document.getElementById('refreshLink').style.visibility = visibility;
+        document.getElementById('errorMsg').innerText = "";
     }
 
     async function refresh() {
-        // If checked in, don't even try to refresh
-        if (localStorage.getItem('checkedIn_' + roomID)) return;
-
         const numEl = document.getElementById('num');
-        const originalText = numEl.innerText;
+        const iconEl = document.querySelector('.refresh-icon');
+        
+        // Spin the icon
+        iconEl.style.transform = "rotate(360deg)";
+        
+        try {
+            const res = await fetch(workerUrl);
+            const data = await res.json();
+            numEl.innerText = data.count;
+        } catch(e) { 
+            console.log("Fetch failed"); 
+        } finally {
+            setTimeout(() => {
+                iconEl.style.transition = "none";
+                iconEl.style.transform = "rotate(0deg)";
+                setTimeout(() => iconEl.style.transition = "transform 0.5s ease", 10);
+            }, 500);
+        }
+    }
+
+    async function updateSeat(delta) {
+        const pinInput = document.getElementById('pinInput').value;
+        const errorMsg = document.getElementById('errorMsg');
+
+        // Verify PIN if joining
+        if (delta === -1 && pinInput !== pinMapping[baseRoom]) {
+            errorMsg.innerText = "Invalid PIN";
+            return;
+        }
+
+        try {
+            const response = await fetch(workerUrl, { 
+                method: 'POST',
+                body: JSON.stringify({ change: delta }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById('num').innerText = data.count;
+                if (delta === -1) {
+                    localStorage.setItem('checkedIn_' + roomID, 'true');
+                    setUI(true);
+                } else {
+                    localStorage.removeItem('checkedIn_' + roomID);
+                    setUI(false);
+                }
+            }
+        } catch(e) { errorMsg.innerText = "Connection Error"; }
+    }
+
+    // Initialize
+    if (localStorage.getItem('checkedIn_' + roomID)) {
+        setUI(true);
+    } else {
+        setUI(false);
+    }
+
+    // Fetch initial count and refresh when tab is focused
+    refresh();
+    window.addEventListener('focus', refresh);
+</script>
+
+</body>
+</html>
