@@ -53,33 +53,45 @@
     <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px; height: 1em;"></div>
 </div>
 
-<<script>
-    // 1. Get the Room ID directly from your Whova link (e.g., Room1_1300)
+<script>
     const params = new URLSearchParams(window.location.search);
     const roomID = params.get('room'); 
-
-    // 2. PIN Mapping - We only need the base Room names here
-    const pinMapping = { 
-        'Room1': '0412', 
-        'Room2': '9876', 
-        'Room3': '3314', 
-        'Room4': '4063' 
-    };
-
-    // Extract "Room1" from "Room1_1300" to verify the PIN
+    const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
+    
+    // Extract base room (e.g., "Room1") for PIN check
     const baseRoom = roomID ? roomID.split('_')[0] : null;
     const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
+    
+    let refreshInterval = null;
 
-    if (!roomID) {
-        document.getElementById('num').innerText = "ERR";
-        document.body.innerHTML = "<h1>Invalid Link</h1>";
+    // --- LOGIC TO STOP/START CLOUDFLARE QUERIES ---
+    function stopRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
     }
 
-    // --- UI FUNCTIONS ---
+    function startRefresh() {
+        if (!refreshInterval) {
+            refresh(); // Get initial count immediately
+            refreshInterval = setInterval(refresh, 60000); // Check once per minute
+        }
+    }
+
     function setUI(checkedIn) {
         document.getElementById('entryArea').style.display = checkedIn ? 'none' : 'block';
         document.getElementById('successArea').style.display = checkedIn ? 'block' : 'none';
-        document.getElementById('errorMsg').innerText = "";
+        
+        // Hide/Show the number container entirely
+        document.getElementById('num').style.visibility = checkedIn ? 'hidden' : 'visible';
+        document.querySelector('.text').style.visibility = checkedIn ? 'hidden' : 'visible';
+        
+        if (checkedIn) {
+            stopRefresh(); // STOP ALL REQUESTS
+        } else {
+            startRefresh(); // RESUME REQUESTS
+        }
     }
 
     async function refresh() {
@@ -88,7 +100,7 @@
             const res = await fetch(workerUrl);
             const data = await res.json();
             document.getElementById('num').innerText = data.count;
-        } catch(e) { console.log("Sync..."); }
+        } catch(e) { console.error("Sync paused..."); }
     }
 
     async function updateSeat(delta) {
@@ -104,6 +116,7 @@
                 body: JSON.stringify({ change: delta }),
                 headers: { 'Content-Type': 'application/json' }
             });
+            
             if (response.ok) {
                 const data = await response.json();
                 document.getElementById('num').innerText = data.count;
@@ -115,14 +128,13 @@
                     setUI(false);
                 }
             }
-        } catch(e) { document.getElementById('errorMsg').innerText = "Error"; }
+        } catch(e) { document.getElementById('errorMsg').innerText = "Connection Error"; }
     }
 
-    // Start
+    // --- INITIALIZE ---
     if (localStorage.getItem('checkedIn_' + roomID)) {
         setUI(true);
     } else {
-        refresh();
-        setInterval(refresh, 60000);
+        setUI(false);
     }
 </script>
