@@ -44,17 +44,26 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        const params = new URLSearchParams(window.location.search);
-        const roomID = params.get('room') || 'Room1';
-        
-        // ADD YOUR PINs HERE: 'RoomID': 'PIN'
-        const pinMapping = {
-            'Room1': '0412',
-            'Room2': '9876',
-            'Room3': '3314',
-            'Room4': '4063'    
-        };
+
+
+// 1. Get Room from URL only
+const params = new URLSearchParams(window.location.search);
+const roomID = params.get('room'); // Removed the default 'Room1'
+
+// 2. Stop everything if no room is found
+if (!roomID) {
+    document.getElementById('num').innerText = "ERR";
+    document.getElementById('errorMsg').innerText = "No Room Specified in URL";
+    document.getElementById('btn').disabled = true;
+    throw new Error("Stopping: No Room ID provided."); 
+}
+
+const pinMapping = {
+    'Room1': '0412',
+    'Room2': '9876',
+    'Room3': '3314',
+    'Room4': '4063'
+};
 
         const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
         let refreshInterval;
