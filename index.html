@@ -58,26 +58,43 @@
     const roomID = params.get('room');
     const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
     const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
+    const EXPIRY_TIME = 60 * 60 * 1000; // 60 minutes in milliseconds
     
-    // UI Toggle
+    let refreshInterval;
+
     function setUI(checkedIn) {
         document.getElementById('entryArea').style.display = checkedIn ? 'none' : 'block';
         document.getElementById('successArea').style.display = checkedIn ? 'block' : 'none';
         document.getElementById('errorMsg').innerText = "";
     }
 
+    // Logic to check if the check-in has expired
+    function checkExpiration() {
+        const checkInData = localStorage.getItem('checkedIn_' + roomID);
+        if (checkInData) {
+            const parsedData = JSON.parse(checkInData);
+            const now = new Date().getTime();
+
+            if (now - parsedData.timestamp > EXPIRY_TIME) {
+                // It's been more than an hour, clear it!
+                localStorage.removeItem('checkedIn_' + roomID);
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
     async function updateSeat(delta) {
         const pinInput = document.getElementById('pinInput').value;
         const errorMsg = document.getElementById('errorMsg');
 
-        // Only validate PIN when joining
         if (delta === -1 && pinInput !== pinMapping[roomID]) {
             errorMsg.innerText = "Invalid PIN";
             return;
         }
 
         try {
-            // We tell the worker to add or subtract 1
             const response = await fetch(workerUrl, { 
                 method: 'POST',
                 body: JSON.stringify({ change: delta }),
@@ -89,7 +106,9 @@
                 document.getElementById('num').innerText = newVal;
                 
                 if (delta === -1) {
-                    localStorage.setItem('checkedIn_' + roomID, 'true');
+                    // Save both the status and the time they checked in
+                    const checkInRecord = { status: true, timestamp: new Date().getTime() };
+                    localStorage.setItem('checkedIn_' + roomID, JSON.stringify(checkInRecord));
                     setUI(true);
                 } else {
                     localStorage.removeItem('checkedIn_' + roomID);
@@ -101,13 +120,19 @@
 
     async function refresh() {
         if (document.hidden) return;
-        const res = await fetch(workerUrl);
-        const val = await res.text();
-        document.getElementById('num').innerText = val;
+        try {
+            const res = await fetch(workerUrl);
+            const val = await res.text();
+            document.getElementById('num').innerText = val;
+        } catch(e) {}
     }
 
-    // Initialize
-    if (localStorage.getItem('checkedIn_' + roomID)) { setUI(true); }
-    refresh();
-    setInterval(refresh, 60000);
+    // INITIALIZE
+    if (checkExpiration()) { 
+        setUI(true); 
+    } else {
+        setUI(false);
+        refresh();
+        refreshInterval = setInterval(refresh, 60000);
+    }
 </script>
