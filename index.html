@@ -58,25 +58,46 @@
     const roomID = params.get('room');
     const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
     const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
-    const EXPIRY_TIME = 60 * 60 * 1000; // 60 minutes in milliseconds
+    const EXPIRY_TIME = 60 * 60 * 1000; 
     
-    let refreshInterval;
+    let refreshInterval = null;
+
+    // Stops background requests to save Cloudflare quota
+    function stopRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+            console.log("Polling stopped to save data.");
+        }
+    }
+
+    // Starts background requests (only if not checked in)
+    function startRefresh() {
+        if (!refreshInterval) {
+            refresh(); // Get initial count
+            refreshInterval = setInterval(refresh, 60000);
+            console.log("Polling started.");
+        }
+    }
 
     function setUI(checkedIn) {
         document.getElementById('entryArea').style.display = checkedIn ? 'none' : 'block';
         document.getElementById('successArea').style.display = checkedIn ? 'block' : 'none';
         document.getElementById('errorMsg').innerText = "";
+        
+        if (checkedIn) {
+            stopRefresh(); // KILL REQUESTS
+        } else {
+            startRefresh(); // RESUME REQUESTS
+        }
     }
 
-    // Logic to check if the check-in has expired
     function checkExpiration() {
         const checkInData = localStorage.getItem('checkedIn_' + roomID);
         if (checkInData) {
             const parsedData = JSON.parse(checkInData);
             const now = new Date().getTime();
-
             if (now - parsedData.timestamp > EXPIRY_TIME) {
-                // It's been more than an hour, clear it!
                 localStorage.removeItem('checkedIn_' + roomID);
                 return false;
             }
@@ -106,9 +127,8 @@
                 document.getElementById('num').innerText = newVal;
                 
                 if (delta === -1) {
-                    // Save both the status and the time they checked in
-                    const checkInRecord = { status: true, timestamp: new Date().getTime() };
-                    localStorage.setItem('checkedIn_' + roomID, JSON.stringify(checkInRecord));
+                    const record = { status: true, timestamp: new Date().getTime() };
+                    localStorage.setItem('checkedIn_' + roomID, JSON.stringify(record));
                     setUI(true);
                 } else {
                     localStorage.removeItem('checkedIn_' + roomID);
@@ -131,8 +151,6 @@
     if (checkExpiration()) { 
         setUI(true); 
     } else {
-        setUI(false);
-        refresh();
-        refreshInterval = setInterval(refresh, 60000);
+        setUI(false); // This will trigger startRefresh()
     }
 </script>
