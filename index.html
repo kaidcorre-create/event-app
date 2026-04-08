@@ -35,78 +35,70 @@
 </head>
 <body>
 
-   <div class="card" id="cardContent">
+<div class="card" id="cardContent">
     <div id="num">--</div>
     <div class="text">Seats Available</div>
     
+    <div id="refreshLink" style="font-size: 0.7rem; color: #666; cursor: pointer; text-decoration: underline; margin-top: -5px; margin-bottom: 15px;" onclick="refresh()">
+        Check Live Seats
+    </div>
+
     <div id="entryArea">
         <input type="number" id="pinInput" placeholder="PIN CODE">
-        <button id="joinBtn" onclick="updateSeat(-1)">I'M IN THE ROOM</button>
+        <button id="btn" onclick="updateSeat(-1)">I'M IN THE ROOM</button>
     </div>
 
     <div id="successArea" style="display:none;">
         <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
         <div style="color: #28a745; font-weight: bold; margin-bottom: 15px;">CHECKED IN</div>
-        <button id="leaveBtn" style="background: #333; color: white; box-shadow: 0 4px 0 #000;" onclick="updateSeat(1)">LEAVE ROOM</button>
+        <button id="leaveBtn" style="background: #333; color: white;" onclick="updateSeat(1)">LEAVE ROOM</button>
     </div>
 
-    <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px; height: 1em;"></div>
+    <div id="errorMsg" style="color: red; font-size: 0.8rem; margin-top: 8px;"></div>
 </div>
 
 <script>
     const params = new URLSearchParams(window.location.search);
     const roomID = params.get('room'); 
     const pinMapping = { 'Room1': '0412', 'Room2': '9876', 'Room3': '3314', 'Room4': '4063' };
-    
-    // Extract base room (e.g., "Room1") for PIN check
     const baseRoom = roomID ? roomID.split('_')[0] : null;
     const workerUrl = `https://seat-counter.kai-d-corre-ea2.workers.dev/?room=${roomID}`;
-    
-    let refreshInterval = null;
-
-    // --- LOGIC TO STOP/START CLOUDFLARE QUERIES ---
-    function stopRefresh() {
-        if (refreshInterval) {
-            clearInterval(refreshInterval);
-            refreshInterval = null;
-        }
-    }
-
-    function startRefresh() {
-        if (!refreshInterval) {
-            refresh(); // Get initial count immediately
-            refreshInterval = setInterval(refresh, 60000); // Check once per minute
-        }
-    }
 
     function setUI(checkedIn) {
         document.getElementById('entryArea').style.display = checkedIn ? 'none' : 'block';
         document.getElementById('successArea').style.display = checkedIn ? 'block' : 'none';
         
-        // Hide/Show the number container entirely
-        document.getElementById('num').style.visibility = checkedIn ? 'hidden' : 'visible';
-        document.querySelector('.text').style.visibility = checkedIn ? 'hidden' : 'visible';
-        
-        if (checkedIn) {
-            stopRefresh(); // STOP ALL REQUESTS
-        } else {
-            startRefresh(); // RESUME REQUESTS
-        }
+        // Hide/Show seat info and refresh button
+        const visibility = checkedIn ? 'hidden' : 'visible';
+        document.getElementById('num').style.visibility = visibility;
+        document.querySelector('.text').style.visibility = visibility;
+        document.getElementById('refreshLink').style.visibility = visibility;
     }
 
     async function refresh() {
-        if (document.hidden) return;
+        // If checked in, don't even try to refresh
+        if (localStorage.getItem('checkedIn_' + roomID)) return;
+
+        const numEl = document.getElementById('num');
+        const originalText = numEl.innerText;
+        numEl.innerText = "..."; // Visual feedback that it's loading
+
         try {
             const res = await fetch(workerUrl);
             const data = await res.json();
-            document.getElementById('num').innerText = data.count;
-        } catch(e) { console.error("Sync paused..."); }
+            numEl.innerText = data.count;
+        } catch(e) { 
+            numEl.innerText = originalText;
+            console.log("Network error"); 
+        }
     }
 
     async function updateSeat(delta) {
         const pinInput = document.getElementById('pinInput').value;
+        const errorMsg = document.getElementById('errorMsg');
+
         if (delta === -1 && pinInput !== pinMapping[baseRoom]) {
-            document.getElementById('errorMsg').innerText = "Invalid PIN";
+            errorMsg.innerText = "Invalid PIN";
             return;
         }
 
@@ -126,9 +118,10 @@
                 } else {
                     localStorage.removeItem('checkedIn_' + roomID);
                     setUI(false);
+                    refresh(); // Get a fresh count as soon as they leave
                 }
             }
-        } catch(e) { document.getElementById('errorMsg').innerText = "Connection Error"; }
+        } catch(e) { errorMsg.innerText = "Error updating"; }
     }
 
     // --- INITIALIZE ---
@@ -136,5 +129,10 @@
         setUI(true);
     } else {
         setUI(false);
+        refresh(); 
     }
+
+    // Background refresh triggers (No timer!)
+    window.addEventListener('focus', refresh);
+    document.getElementById('pinInput').addEventListener('click', refresh);
 </script>
